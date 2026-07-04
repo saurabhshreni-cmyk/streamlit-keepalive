@@ -1,34 +1,38 @@
-# streamlit-keepalive
+# Streamlit Keep-Alive
 
-Keeps my [Streamlit Community Cloud](https://streamlit.io/cloud) apps from going to
-sleep, so their links always load instantly for anyone who clicks them.
+Keeps Streamlit Community Cloud apps awake so their links load instantly for anyone who opens them.
+
+[![Keep Streamlit apps awake](https://github.com/saurabhshreni-cmyk/streamlit-keepalive/actions/workflows/keepalive.yml/badge.svg)](https://github.com/saurabhshreni-cmyk/streamlit-keepalive/actions/workflows/keepalive.yml)
+
+## Overview
+
+Streamlit Community Cloud apps go to sleep after a period of inactivity, which makes demo and portfolio links slow or broken the first time someone clicks them. This project runs a scheduled GitHub Actions job that visits each app in a headless browser and wakes it if it has gone to sleep, keeping every link warm and instantly loadable.
+
+## Why a headless browser (not a simple ping)
+
+A plain HTTP request to a sleeping app returns `200 OK` with only a static HTML shell — it never starts the underlying Python process, so the app stays asleep. Waking the app requires a real browser visit that renders the page and clicks the "Yes, get this app back up!" button. Playwright driving headless Chromium provides exactly that.
 
 ## How it works
 
-Free-tier Streamlit apps go to sleep after a period of inactivity. A plain HTTP
-"ping" does **not** wake them — the server returns `200 OK` with a static HTML
-shell without actually starting the Python app. So this repo drives a **real
-headless browser** (Playwright + Chromium) that:
+1. A cron schedule triggers the workflow every 4 hours (and it can be run manually on demand).
+2. GitHub spins up a fresh Ubuntu runner.
+3. The runner installs Python 3.12 and Playwright with headless Chromium.
+4. It runs `wake.py`, which visits each app URL.
+5. If the wake button is present, the script clicks it and waits for the app to come back up.
 
-1. Visits each app URL.
-2. Detects the **"Yes, get this app back up!"** button (it only appears when an
-   app is asleep).
-3. Clicks it to wake the app if needed.
+```
+cron → Ubuntu runner → Playwright (headless Chromium) → visit each app → wake if asleep
+```
 
-A [GitHub Actions](.github/workflows/keepalive.yml) workflow runs this on a
-schedule — **every 4 hours** — and can also be triggered manually from the
-**Actions** tab ("Run workflow"). Because the repo is **public**, GitHub Actions
-minutes are free and unlimited.
+## Tech stack
 
-## Currently keeping awake
+- Python
+- Playwright (headless Chromium)
+- GitHub Actions
 
-- https://turboquant-vit.streamlit.app
-- https://skin-cancer-detection-saurabh.streamlit.app
+## Configuration
 
-## Add or remove an app
-
-1. Edit the `APPS` list in [`wake.py`](wake.py).
-2. Commit and push. That's it — the next scheduled run picks up the change.
+To add or remove an app, edit the `APPS` list in `wake.py` and push. The next scheduled run picks up the change automatically.
 
 ```python
 APPS = [
@@ -38,11 +42,18 @@ APPS = [
 ]
 ```
 
+## Local usage (optional)
+
+The automation runs in the cloud on a schedule regardless, but the script can also be run locally:
+
+```bash
+pip install playwright
+python -m playwright install chromium
+python wake.py
+```
+
 ## Notes
 
-- **No secrets.** There are no passwords, tokens, or API keys in this repo —
-  nothing sensitive is committed.
-- **Scheduled workflows auto-disable** after 60 days of no repo activity. Any
-  push re-enables them.
-- Free-tier scheduled runs can be delayed at GitHub's peak times; the 4-hour
-  interval absorbs that.
+- Scheduled runs can be delayed during GitHub's peak times; the 4-hour interval absorbs this while staying well within the app sleep window.
+- GitHub disables scheduled workflows after 60 days of no repository activity; any push re-enables them.
+- No secrets or credentials are stored in this repository.
